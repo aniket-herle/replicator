@@ -1,0 +1,44 @@
+spring:
+  application:
+    name: S3 Replicator Service
+  datasource:
+    driver-class-name: com.mysql.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/file-mirror-replicator
+    username: root
+    password: root
+
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: update
+    database-platform: org.hibernate.dialect.MySQLDialect
+
+
+  kafka:
+      consumer:
+        bootstrap-servers: localhost:9092
+        group-id: file-upload-consumer-group
+        auto-offset-reset: earliest
+        enable-auto-commit: false
+
+        key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+        value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+
+        properties:
+          spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
+          spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+
+          spring.json.trusted.packages: com.aniket.mirror.upload.dto.kafka
+
+
+
+server:
+  servlet:
+    context-path: /api
+  port: 8082
+
+
+aws:
+  s3:
+    bucket: amzn-file-mirror-bucket
+  region: ap-south-1
