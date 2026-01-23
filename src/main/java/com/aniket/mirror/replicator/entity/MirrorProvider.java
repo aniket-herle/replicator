@@ -1,7 +1,10 @@
 package com.aniket.mirror.replicator.entity;
 
 import com.aniket.mirror.replicator.constants.FileStatus;
+import com.aniket.mirror.replicator.constants.ProviderType;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -24,7 +27,8 @@ public class MirrorProvider {
   @JoinColumn(name="job_id")
   private FileReplicationJob fileReplicationJob;
 
-  private String providerName;
+  @Enumerated(EnumType.STRING)
+  private ProviderType providerName;
 
   private FileStatus fileStatus;
 

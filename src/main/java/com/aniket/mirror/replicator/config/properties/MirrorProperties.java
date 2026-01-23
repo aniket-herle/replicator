@@ -1,6 +1,7 @@
 package com.aniket.mirror.replicator.config.properties;
 
 
+import com.aniket.mirror.replicator.constants.ProviderType;
 import java.util.List;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -11,5 +12,5 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "mirror")
 public class MirrorProperties {
 
-  private List<String> enabledProviders;
+  private List<ProviderType> enabledProviders;
 }

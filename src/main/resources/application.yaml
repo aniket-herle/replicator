@@ -2,7 +2,7 @@ spring:
   application:
     name: S3 Replicator Service
   datasource:
-    driver-class-name: com.mysql.jdbc.Driver
+    driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/file-mirror-replicator
     username: root
     password: root
@@ -21,6 +21,7 @@ spring:
         ack-mode: manual
       consumer:
         group-id: file-upload-consumer-group
+#        consume only latest messages ignoring older
         auto-offset-reset: latest
         enable-auto-commit: false
 
@@ -54,3 +55,7 @@ aws:
 mirror:
   enabled-providers:
     - Stream Tape
+    - Kraken File
+  streamTape:
+    api-login: ${STREAMTAPE_API_LOGIN}
+    api-key: ${STREAMTAPE_API_KEY}

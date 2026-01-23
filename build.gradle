@@ -44,7 +44,8 @@ dependencies {
 	// Jackson 2 (Kafka compatible)
 	implementation 'org.springframework.boot:spring-boot-jackson2'
 
-
+	//Apache HttpClient 5
+	implementation 'org.apache.httpcomponents.client5:httpclient5'
 	// S3 client
 	implementation "software.amazon.awssdk:s3"
 

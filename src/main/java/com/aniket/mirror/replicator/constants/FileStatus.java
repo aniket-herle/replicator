@@ -2,7 +2,7 @@ package com.aniket.mirror.replicator.constants;
 
 public enum FileStatus {
 
-  PENDING,
+  CREATED,
   SUBMITTED,
   PARTIALLY_SUCCEEDED,
   SUCCEEDED,
