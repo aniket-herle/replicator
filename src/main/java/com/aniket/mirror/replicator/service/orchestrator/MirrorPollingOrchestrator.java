@@ -1,30 +1,30 @@
-package com.aniket.mirror.replicator.service.mirror;
+package com.aniket.mirror.replicator.service.orchestrator;
 
-import com.aniket.mirror.replicator.config.properties.MirrorProperties;
 import com.aniket.mirror.replicator.entity.FileReplicationJob;
 import com.aniket.mirror.replicator.entity.MirrorProvider;
+import com.aniket.mirror.replicator.service.registry.MirrorProviderRegistry;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
-public class MirrorOrchestratorService {
+@RequiredArgsConstructor
+public class MirrorPollingOrchestrator {
 
   private final MirrorProviderRegistry providerRegistry;
 
+  public void orchestrate(List<MirrorProvider> mirrorProviderList) {
 
-  public void orchestrate(FileReplicationJob job) {
+    for (MirrorProvider provider : mirrorProviderList) {
 
-    for (MirrorProvider provider : job.getMirrorProviderList()) {
-
-          try {
+      try {
         providerRegistry
             .get(provider.getProviderName())
-            .mirror(provider);
+            .poll(provider);
       } catch (Exception ex) {
-        log.error("Mirror failed for provider {}",
+        log.error("Polling failed for provider {}",
             provider.getProviderName(), ex);
       }
     }

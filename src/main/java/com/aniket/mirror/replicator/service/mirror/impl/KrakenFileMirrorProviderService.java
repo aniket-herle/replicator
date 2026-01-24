@@ -28,5 +28,11 @@ public class KrakenFileMirrorProviderService implements MirrorProviderService {
     log.info("Completed mirroring via {}", getType());
   }
 
+  @Override
+  @Async("pollingExecutor")
+  public void poll(MirrorProvider job) throws InterruptedException{
+
+  }
+
 
 }

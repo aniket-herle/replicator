@@ -2,10 +2,10 @@ package com.aniket.mirror.replicator.service.api.impl;
 
 import com.aniket.mirror.replicator.constants.ProviderType;
 import com.aniket.mirror.replicator.dto.response.ApiResponse;
-import com.aniket.mirror.replicator.dto.response.streamtape.StreamTapeRemoteUploadResponse;
+import com.aniket.mirror.replicator.dto.response.streamtape.poll.STRemoteUploadPollResponse;
+import com.aniket.mirror.replicator.dto.response.streamtape.upload.STRemoteUploadResponse;
 import com.aniket.mirror.replicator.entity.FileReplicationJob;
 import com.aniket.mirror.replicator.service.api.ProviderApiClient;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -36,9 +36,9 @@ public class StreamTapeApiClient
   }
 
   @Override
-  public ApiResponse upload(FileReplicationJob job,String fileURL) {
+  public STRemoteUploadResponse upload(FileReplicationJob job,String fileURL) {
     try {
-      StreamTapeRemoteUploadResponse response = restClient.get()
+      STRemoteUploadResponse response = restClient.get()
           .uri(uriBuilder -> uriBuilder
               .path("/remotedl/add")
               .queryParam("login", STREAM_TAPE_API_LOGIN)
@@ -47,7 +47,7 @@ public class StreamTapeApiClient
               .build()
           )
           .retrieve()
-          .body(StreamTapeRemoteUploadResponse.class);
+          .body(STRemoteUploadResponse.class);
 
       return response;
     }catch (RestClientResponseException ex){
@@ -57,4 +57,19 @@ public class StreamTapeApiClient
       throw ex;
     }
   }
+
+  @Override
+  public STRemoteUploadPollResponse pollStatus(String remoteUploadId) {
+     return restClient.get()
+        .uri(uriBuilder -> uriBuilder
+        .path("/remotedl/status")
+        .queryParam("login", STREAM_TAPE_API_LOGIN)
+        .queryParam("key", STREAM_TAPE_API_KEY)
+        .queryParam("id", remoteUploadId)
+        .build()
+          )
+          .retrieve()
+        .body(STRemoteUploadPollResponse.class);
+  }
+
 }

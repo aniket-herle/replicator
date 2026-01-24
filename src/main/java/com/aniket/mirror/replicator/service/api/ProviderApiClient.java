@@ -6,5 +6,8 @@ import com.aniket.mirror.replicator.entity.FileReplicationJob;
 
 public interface ProviderApiClient {
   ProviderType getType();
+
   ApiResponse upload(FileReplicationJob job,String fileURL);
+
+  ApiResponse pollStatus(String remoteUploadId);
 }

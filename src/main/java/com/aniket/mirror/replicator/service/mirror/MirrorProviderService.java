@@ -7,5 +7,7 @@ public interface MirrorProviderService {
 
   void mirror(MirrorProvider job) throws InterruptedException;
 
+  void poll(MirrorProvider job) throws InterruptedException;
+
   ProviderType getType();
 }

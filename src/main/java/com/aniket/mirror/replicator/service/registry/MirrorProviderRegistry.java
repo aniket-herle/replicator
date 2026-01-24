@@ -1,6 +1,7 @@
-package com.aniket.mirror.replicator.service.mirror;
+package com.aniket.mirror.replicator.service.registry;
 
 import com.aniket.mirror.replicator.constants.ProviderType;
+import com.aniket.mirror.replicator.service.mirror.MirrorProviderService;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;

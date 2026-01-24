@@ -30,9 +30,25 @@ public class MirrorProvider {
   @Enumerated(EnumType.STRING)
   private ProviderType providerName;
 
+  @Enumerated(EnumType.STRING)
   private FileStatus fileStatus;
 
-  private String remoteUrl;
+  private String remoteUploadId;
+
+  private String externalFileId;
+
+  // ---------- Polling related fields ----------
+
+  private Instant lastPolledAt;
+
+  private Instant nextPollAt;
+
+  private int pollAttemptCount;
+
+  private String lastError;
+
+//  --------------------------------------------
+
 
   @CreationTimestamp
   private Instant createdAt;
