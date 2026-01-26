@@ -29,6 +29,13 @@ public class StreamTapeMirrorProviderService
 
   private final MirrorProviderRepository mirrorProviderRepository;
 
+
+  private static final int MAX_POLL_ATTEMPTS = 3;
+
+  private static final long BACKOFF_BASE_SECONDS = 60; // 1 minute
+
+  private static final long BACKOFF_MAX_SECONDS = 30 * 60; // 30 minutes
+
   @Override
   public ProviderType getType() {
     return ProviderType.STREAM_TAPE;
@@ -61,42 +68,117 @@ public class StreamTapeMirrorProviderService
 
   @Override
   @Async("pollingExecutor")
-  public void poll(MirrorProvider job) throws InterruptedException{
-    log.info("Started polling for {} for remote Id {}",getType(),job.getRemoteUploadId());
-      String remoteId = job.getRemoteUploadId();
-    STRemoteUploadPollResponse pollStatus = streamTapeApiClient.pollStatus(remoteId);
-    if(pollStatus==null || !pollStatus.validateResponse()){
-      log.error("Polling failed for StreamTape for , remoteId={}", remoteId);
-      job.setFileStatus(FileStatus.FAILED);
-      job.setLastPolledAt(Instant.now());
-      job.setPollAttemptCount(job.getPollAttemptCount()+1);
-      //Schedule next poll on failure after 3mins, further it requires more complex logic based on
-      // pollattempt count etc which can be done later
-      job.setNextPollAt(Instant.now().plusSeconds(180));
-      if(pollStatus!=null){
-        job.setLastError(pollStatus.getMsg());
-      }else{
-        job.setLastError("Error occurred while polling stream tape");
-      }
-    }else{
-      STVideoData videoData = pollStatus.getResult().get(job.getRemoteUploadId());
-      String status = videoData.getStatus();
-      if(status.equals("finished")){
-        //Download has been completed
-        log.info("StreamTape upload complete for remote upload id {}",job.getRemoteUploadId());
-        String linkId =(String) videoData.getLinkid();
-        job.setFileStatus(FileStatus.SUCCEEDED);
-        job.setLastPolledAt(Instant.now());
-        job.setPollAttemptCount(job.getPollAttemptCount()+1);
-        job.setExternalFileId(linkId);
-      }else if(status.equals("downloading")){
-        log.info("StreamTape upload in progress for remote upload id {}",job.getRemoteUploadId());
-        job.setLastPolledAt(Instant.now());
-        job.setPollAttemptCount(job.getPollAttemptCount()+1);
-        job.setNextPollAt(Instant.now().plusSeconds(180));
-      }
+  public void poll(MirrorProvider job) throws InterruptedException {
+    log.info("Started polling for {} for remote Id {}", getType(), job.getRemoteUploadId());
+    String remoteId = job.getRemoteUploadId();
+
+    STRemoteUploadPollResponse pollResponse;
+    try {
+      pollResponse = streamTapeApiClient.pollStatus(remoteId);
+    } catch (Exception ex) {
+      log.error("Exception while calling StreamTape poll for remoteId={}, error={}", remoteId, ex.getMessage(), ex);
+      handlePollingFailure(job, "Exception during poll: " + ex.getMessage());
+      mirrorProviderRepository.save(job);
+      return;
     }
+
+    if (pollResponse == null || !pollResponse.validateResponse()) {
+      String err = pollResponse != null ? pollResponse.getMsg() : "Invalid/null response from StreamTape";
+      log.error("Polling failed for StreamTape, remoteId={}, msg={}", remoteId, err);
+      handlePollingFailure(job, err);
+      mirrorProviderRepository.save(job);
+      return;
+    }
+
+    STVideoData videoData = pollResponse.getResult() != null ? pollResponse.getResult().get(remoteId) : null;
+    if (videoData == null) {
+      log.error("No video data returned by StreamTape for remoteId={}", remoteId);
+      handlePollingFailure(job, "No video data returned for id: " + remoteId);
+      mirrorProviderRepository.save(job);
+      return;
+    }
+
+    String status = videoData.getStatus() != null ? videoData.getStatus().toLowerCase().trim() : "unknown";
+
+    switch (status) {
+      case "finished":
+        handleFinished(job, videoData);
+        break;
+      case "downloading":
+      case "processing":
+      case "queued":
+      case "started":
+        handleInProgress(job);
+        break;
+      case "error":
+      case "failed":
+      case "notfound":
+        handlePermanentFailure(job, "Remote upload status '" + status + "' for id=" + remoteId);
+        break;
+      default:
+        log.warn("Unknown StreamTape status '{}' for remoteId={}, treating as transient", status, remoteId);
+        handleInProgress(job);
+        break;
+    }
+
     mirrorProviderRepository.save(job);
+  }
+
+  private void handleFinished(MirrorProvider job, STVideoData videoData) {
+    String linkId = parseLinkId(videoData.getLinkid());
+    job.setFileStatus(FileStatus.SUCCEEDED);
+    job.setExternalFileId(linkId);
+    job.setLastPolledAt(Instant.now());
+    job.setPollAttemptCount(job.getPollAttemptCount() + 1);
+    job.setNextPollAt(null);
+    job.setLastError(null);
+    log.info("StreamTape upload finished for remoteId={}, linkId={}", job.getRemoteUploadId(), linkId);
+  }
+
+  private void handleInProgress(MirrorProvider job) {
+    job.setFileStatus(FileStatus.IN_PROGRESS);
+    job.setLastPolledAt(Instant.now());
+    job.setPollAttemptCount(job.getPollAttemptCount() + 1);
+    long nextInSeconds = calculateBackoffSeconds(job.getPollAttemptCount());
+    job.setNextPollAt(Instant.now().plusSeconds(nextInSeconds));
+    job.setLastError(null);
+    log.info("StreamTape upload in progress for remoteId={}, next poll in {}s", job.getRemoteUploadId(), nextInSeconds);
+  }
+
+  private void handlePollingFailure(MirrorProvider job, String errorMsg) {
+    job.setLastPolledAt(Instant.now());
+    job.setPollAttemptCount(job.getPollAttemptCount() + 1);
+    job.setLastError(errorMsg);
+
+    if (job.getPollAttemptCount() >= MAX_POLL_ATTEMPTS) {
+      job.setFileStatus(FileStatus.FAILED);
+      job.setNextPollAt(null);
+      log.error("Marking job failed after {} attempts, remoteId={}, error={}", job.getPollAttemptCount(), job.getRemoteUploadId(), errorMsg);
+    } else {
+      long waitSeconds = calculateBackoffSeconds(job.getPollAttemptCount());
+      job.setNextPollAt(Instant.now().plusSeconds(waitSeconds));
+      log.info("Scheduling retry #{} for remoteId={} in {}s", job.getPollAttemptCount(), job.getRemoteUploadId(), waitSeconds);
+    }
+  }
+
+  private void handlePermanentFailure(MirrorProvider job, String message) {
+    job.setFileStatus(FileStatus.FAILED);
+    job.setLastPolledAt(Instant.now());
+    job.setPollAttemptCount(job.getPollAttemptCount() + 1);
+    job.setLastError(message);
+    job.setNextPollAt(null);
+    log.error("Permanent failure for remoteId={}, message={}", job.getRemoteUploadId(), message);
+  }
+
+  private long calculateBackoffSeconds(int attemptCount) {
+    // attemptCount is 1-based
+    long multiplier = 1L << Math.max(0, attemptCount - 1); // 2^(attemptCount-1)
+    long seconds = BACKOFF_BASE_SECONDS * multiplier;
+    return Math.min(seconds, BACKOFF_MAX_SECONDS);
+  }
+
+  private String parseLinkId(Object linkId) {
+    return linkId == null ? null : String.valueOf(linkId);
   }
 
 

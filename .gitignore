@@ -1,3 +1,9 @@
+# Logs
+logs/
+*.log
+**/logs/
+**/*.log
+
 HELP.md
 .gradle
 build/
