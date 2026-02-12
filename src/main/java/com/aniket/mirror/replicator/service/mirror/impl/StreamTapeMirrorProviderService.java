@@ -2,6 +2,7 @@ package com.aniket.mirror.replicator.service.mirror.impl;
 
 import com.aniket.mirror.replicator.constants.FileStatus;
 import com.aniket.mirror.replicator.constants.ProviderType;
+import com.aniket.mirror.replicator.config.properties.StreamTapeProperties;
 import com.aniket.mirror.replicator.dto.response.streamtape.poll.STRemoteUploadPollResponse;
 import com.aniket.mirror.replicator.dto.response.streamtape.poll.STVideoData;
 import com.aniket.mirror.replicator.dto.response.streamtape.upload.STRemoteUploadResponse;
@@ -29,12 +30,7 @@ public class StreamTapeMirrorProviderService
 
   private final MirrorProviderRepository mirrorProviderRepository;
 
-
-  private static final int MAX_POLL_ATTEMPTS = 3;
-
-  private static final long BACKOFF_BASE_SECONDS = 60; // 1 minute
-
-  private static final long BACKOFF_MAX_SECONDS = 30 * 60; // 30 minutes
+  private final StreamTapeProperties properties;
 
   @Override
   public ProviderType getType() {
@@ -52,7 +48,7 @@ public class StreamTapeMirrorProviderService
     response =  streamTapeApiClient.upload(provider.getFileReplicationJob(),s3SignedUrl);
     provider.setPollAttemptCount(0);
     //Set when next poll should occur
-    provider.setNextPollAt(Instant.now().plusSeconds(10));
+    provider.setNextPollAt(Instant.now().plusSeconds(properties.getInitialPollDelaySeconds()));
     if(!validateResponse(response)) {
       log.error("Error uploading stream tape, response={}", response);
       provider.setFileStatus(FileStatus.FAILED);
@@ -150,7 +146,7 @@ public class StreamTapeMirrorProviderService
     job.setPollAttemptCount(job.getPollAttemptCount() + 1);
     job.setLastError(errorMsg);
 
-    if (job.getPollAttemptCount() >= MAX_POLL_ATTEMPTS) {
+    if (job.getPollAttemptCount() >= properties.getPollMaxAttempts()) {
       job.setFileStatus(FileStatus.FAILED);
       job.setNextPollAt(null);
       log.error("Marking job failed after {} attempts, remoteId={}, error={}", job.getPollAttemptCount(), job.getRemoteUploadId(), errorMsg);
@@ -173,8 +169,8 @@ public class StreamTapeMirrorProviderService
   private long calculateBackoffSeconds(int attemptCount) {
     // attemptCount is 1-based
     long multiplier = 1L << Math.max(0, attemptCount - 1); // 2^(attemptCount-1)
-    long seconds = BACKOFF_BASE_SECONDS * multiplier;
-    return Math.min(seconds, BACKOFF_MAX_SECONDS);
+    long seconds = properties.getBackoffBaseSeconds() * multiplier;
+    return Math.min(seconds, properties.getBackoffMaxSeconds());
   }
 
   private String parseLinkId(Object linkId) {

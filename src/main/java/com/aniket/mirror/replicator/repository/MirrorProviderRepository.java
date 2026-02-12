@@ -4,6 +4,7 @@ import com.aniket.mirror.replicator.constants.FileStatus;
 import com.aniket.mirror.replicator.entity.MirrorProvider;
 import java.time.Instant;
 import java.util.List;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface MirrorProviderRepository extends JpaRepository<MirrorProvider, Long> {
@@ -11,5 +12,11 @@ public interface MirrorProviderRepository extends JpaRepository<MirrorProvider, 
   List<MirrorProvider> findTop50ByFileStatusAndNextPollAtLessThanEqual(
       FileStatus fileStatus,
       Instant now
+  );
+
+  List<MirrorProvider> findByFileStatusAndNextPollAtLessThanEqual(
+      FileStatus fileStatus,
+      Instant now,
+      Pageable pageable
   );
 }

@@ -19,8 +19,8 @@ public class S3PresignService {
 
 
   public String generateS3Url(FileReplicationJob job){
-    String bucket = job.getS3Bucket();
-    String key = job.getS3Key();
+    String bucket = job.getFile().getS3Bucket();
+    String key = job.getFile().getS3Key();
     Duration expiry = Duration.of(10, ChronoUnit.MINUTES);
     URL preSignedURL = createPresignedDownloadUrl(bucket, key, expiry);
     return preSignedURL.toString();

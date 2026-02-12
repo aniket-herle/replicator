@@ -1,6 +1,7 @@
 package com.aniket.mirror.replicator.service.api.impl;
 
-import com.aniket.mirror.common.exception.ExternalServiceException;
+import com.aniket.mirror.replicator.config.properties.StreamTapeProperties;
+import com.aniket.mirror.replicator.exception.ServerException;
 import com.aniket.mirror.replicator.constants.ProviderType;
 import com.aniket.mirror.replicator.dto.response.ApiResponse;
 import com.aniket.mirror.replicator.dto.response.streamtape.poll.STRemoteUploadPollResponse;
@@ -8,7 +9,7 @@ import com.aniket.mirror.replicator.dto.response.streamtape.upload.STRemoteUploa
 import com.aniket.mirror.replicator.entity.FileReplicationJob;
 import com.aniket.mirror.replicator.service.api.ProviderApiClient;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -21,13 +22,10 @@ public class StreamTapeApiClient
 
   private final RestClient restClient;
 
-  @Value("${mirror.streamTape.api-login}")
-  private  String STREAM_TAPE_API_LOGIN;
+  private final StreamTapeProperties properties;
 
-  @Value("${mirror.streamTape.api-key}")
-  private String STREAM_TAPE_API_KEY;
-
-  public StreamTapeApiClient(RestClient.Builder builder) {
+  public StreamTapeApiClient(RestClient.Builder builder, StreamTapeProperties properties) {
+    this.properties = properties;
     this.restClient = builder
         .baseUrl("https://api.streamtape.com")
         .build();
@@ -41,12 +39,16 @@ public class StreamTapeApiClient
   public STRemoteUploadResponse upload(FileReplicationJob job,String fileURL) {
     long startTime = System.currentTimeMillis();
     try {
+      if (properties.getApiLogin() == null || properties.getApiLogin().isBlank()
+          || properties.getApiKey() == null || properties.getApiKey().isBlank()) {
+        throw new IllegalStateException("StreamTape credentials are not configured");
+      }
       log.info("Starting external call to StreamTape API for upload, jobId: {}", job.getEventId());
       STRemoteUploadResponse response = restClient.get()
           .uri(uriBuilder -> uriBuilder
               .path("/remotedl/add")
-              .queryParam("login", STREAM_TAPE_API_LOGIN)
-              .queryParam("key", STREAM_TAPE_API_KEY)
+              .queryParam("login", properties.getApiLogin())
+              .queryParam("key", properties.getApiKey())
               .queryParam("url", fileURL)
               .build()
           )
@@ -58,12 +60,12 @@ public class StreamTapeApiClient
       return response;
     } catch (RestClientResponseException ex) {
       long duration = System.currentTimeMillis() - startTime;
-      log.error("Failed to call StreamTape API for upload, jobId: {}, status: {}, response: {}", job.getEventId(), ex.getStatusCode(), truncateResponseBody(ex.getResponseBodyAsString()));
-      throw new ExternalServiceException("Failed to initiate remote upload via StreamTape API", ex);
+      log.error("Failed StreamTape upload call | jobId={} | durationMs={} | status={} | response={} ", job.getEventId(), duration, ex.getStatusCode(), truncateResponseBody(ex.getResponseBodyAsString()));
+      throw new ServerException("EXTERNAL_SERVICE_FAILURE", HttpStatus.BAD_GATEWAY, "Failed to initiate remote upload via StreamTape API", ex);
     } catch (RestClientException ex) {
       long duration = System.currentTimeMillis() - startTime;
-      log.error("Failed to call StreamTape API for upload, jobId: {}, error: {}", job.getEventId(), ex.getMessage());
-      throw new ExternalServiceException("Failed to initiate remote upload via StreamTape API", ex);
+      log.error("Failed StreamTape upload call | jobId={} | durationMs={} | error={} ", job.getEventId(), duration, ex.getMessage(), ex);
+      throw new ServerException("EXTERNAL_SERVICE_FAILURE", HttpStatus.BAD_GATEWAY, "Failed to initiate remote upload via StreamTape API", ex);
     }
   }
 
@@ -71,12 +73,16 @@ public class StreamTapeApiClient
   public STRemoteUploadPollResponse pollStatus(String remoteUploadId) {
     long startTime = System.currentTimeMillis();
     try {
+      if (properties.getApiLogin() == null || properties.getApiLogin().isBlank()
+          || properties.getApiKey() == null || properties.getApiKey().isBlank()) {
+        throw new IllegalStateException("StreamTape credentials are not configured");
+      }
       log.info("Starting external call to StreamTape API for poll status, uploadId: {}", remoteUploadId);
       STRemoteUploadPollResponse response = restClient.get()
           .uri(uriBuilder -> uriBuilder
           .path("/remotedl/status")
-          .queryParam("login", STREAM_TAPE_API_LOGIN)
-          .queryParam("key", STREAM_TAPE_API_KEY)
+          .queryParam("login", properties.getApiLogin())
+          .queryParam("key", properties.getApiKey())
           .queryParam("id", remoteUploadId)
           .build()
             )
@@ -88,12 +94,12 @@ public class StreamTapeApiClient
       return response;
     } catch (RestClientResponseException ex) {
       long duration = System.currentTimeMillis() - startTime;
-      log.error("Failed to call StreamTape API for poll status, uploadId: {}, status: {}, response: {}", remoteUploadId, ex.getStatusCode(), truncateResponseBody(ex.getResponseBodyAsString()));
-      throw new ExternalServiceException("Failed to poll status from StreamTape API", ex);
+      log.error("Failed StreamTape poll call | uploadId={} | durationMs={} | status={} | response={}", remoteUploadId, duration, ex.getStatusCode(), truncateResponseBody(ex.getResponseBodyAsString()));
+      throw new ServerException("EXTERNAL_SERVICE_FAILURE", HttpStatus.BAD_GATEWAY, "Failed to poll status from StreamTape API", ex);
     } catch (RestClientException ex) {
       long duration = System.currentTimeMillis() - startTime;
-      log.error("Failed to call StreamTape API for poll status, uploadId: {}, error: {}", remoteUploadId, ex.getMessage());
-      throw new ExternalServiceException("Failed to poll status from StreamTape API", ex);
+      log.error("Failed StreamTape poll call | uploadId={} | durationMs={} | error={}", remoteUploadId, duration, ex.getMessage(), ex);
+      throw new ServerException("EXTERNAL_SERVICE_FAILURE", HttpStatus.BAD_GATEWAY, "Failed to poll status from StreamTape API", ex);
     }
   }
 

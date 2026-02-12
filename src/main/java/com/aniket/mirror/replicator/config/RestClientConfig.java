@@ -3,11 +3,6 @@ package com.aniket.mirror.replicator.config;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
-import org.springframework.web.client.RestClient;
-
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpRequest;
 import org.springframework.http.client.*;
 import org.springframework.web.client.RestClient;
@@ -16,6 +11,8 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+
+import lombok.extern.slf4j.Slf4j;
 
 @Configuration
 public class RestClientConfig {
@@ -26,7 +23,7 @@ public class RestClientConfig {
     apacheFactory.setConnectionRequestTimeout(10_000);
     apacheFactory.setReadTimeout(10_000);
 
-    // ✅ Buffering needed so response body can be read in interceptor + downstream code
+    // Buffering needed so response body can be read in interceptor + downstream code
     ClientHttpRequestFactory bufferingFactory =
         new BufferingClientHttpRequestFactory(apacheFactory);
 
@@ -44,34 +41,34 @@ public class RestClientConfig {
         byte[] body,
         ClientHttpRequestExecution execution
     ) throws IOException {
-
-      // ✅ REQUEST LOG
-      log.info("===== RestClient REQUEST =====");
-      log.info("{} {}", request.getMethod(), request.getURI());
-      log.info("Headers: {}", request.getHeaders());
-
-      if (body != null && body.length > 0) {
-        log.info("Body: {}", new String(body, StandardCharsets.UTF_8));
-      } else {
-        log.info("Body: <empty>");
+      long start = System.currentTimeMillis();
+      log.info("HTTP OUT -> {} {}", request.getMethod(), request.getURI());
+      if (log.isDebugEnabled()) {
+        log.debug("HTTP OUT headers={}", request.getHeaders());
+        log.debug("HTTP OUT body={}", truncate(body));
       }
 
       ClientHttpResponse response = execution.execute(request, body);
 
-      // ✅ RESPONSE LOG
-      log.info("===== RestClient RESPONSE =====");
-      log.info("Status: {}", response.getStatusCode());
-      log.info("Headers: {}", response.getHeaders());
-
       byte[] responseBody = response.getBody().readAllBytes();
-      if (responseBody.length > 0) {
-        log.info("Body: {}", new String(responseBody, StandardCharsets.UTF_8));
-      } else {
-        log.info("Body: <empty>");
+
+      long durationMs = System.currentTimeMillis() - start;
+      log.info("HTTP OUT <- {} {} ({} in {}ms)", request.getMethod(), request.getURI(), response.getStatusCode(), durationMs);
+      if (log.isDebugEnabled()) {
+        log.debug("HTTP IN headers={}", response.getHeaders());
+        log.debug("HTTP IN body={}", truncate(responseBody));
       }
 
-      // ✅ Return a new response so downstream code can still read body
+      // Return a new response so downstream code can still read body
       return new CachedBodyClientHttpResponse(response, responseBody);
+    }
+
+    private static String truncate(byte[] body) {
+      if (body == null || body.length == 0) {
+        return "<empty>";
+      }
+      String text = new String(body, StandardCharsets.UTF_8);
+      return text.length() > 1000 ? text.substring(0, 1000) + "..." : text;
     }
   }
 

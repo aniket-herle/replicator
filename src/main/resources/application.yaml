@@ -35,6 +35,15 @@ spring:
           spring.json.trusted.packages: com.aniket.mirror.events
           spring.json.value.default.type: com.aniket.mirror.events.FileUploadEvent
 
+      producer:
+        bootstrap-servers: localhost:9092
+        acks: all
+        key-serializer: org.apache.kafka.common.serialization.StringSerializer
+        value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+        retries: 3
+        properties:
+          spring.json.add.type.headers: false
+
 logging:
   file:
     name: logs/app.log
@@ -54,8 +63,20 @@ aws:
 #customproperties
 mirror:
   enabled-providers:
-    - Stream Tape
-    - Kraken File
-  streamTape:
-    api-login: ${STREAMTAPE_API_LOGIN}
-    api-key: ${STREAMTAPE_API_KEY}
+    - STREAM_TAPE
+    - KRAKEN_FILE
+  polling:
+    dispatch-delay-ms: 30000
+    batch-size: 50
+  kafka:
+    file-upload-topic: file_upload
+    retry:
+      max-attempts: 5
+      backoff-ms: 1000
+  stream-tape:
+    api-login: ${STREAMTAPE_API_LOGIN:}
+    api-key: ${STREAMTAPE_API_KEY:}
+    initial-poll-delay-seconds: 10
+    poll-max-attempts: 3
+    backoff-base-seconds: 60
+    backoff-max-seconds: 1800

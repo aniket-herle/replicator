@@ -24,7 +24,7 @@ public class MirrorProvider {
   private long id;
 
   @ManyToOne
-  @JoinColumn(name="job_id")
+  @JoinColumn(name = "event_id", nullable = false)
   private FileReplicationJob fileReplicationJob;
 
   @Enumerated(EnumType.STRING)

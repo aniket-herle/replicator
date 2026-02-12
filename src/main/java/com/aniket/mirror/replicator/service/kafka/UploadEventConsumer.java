@@ -1,10 +1,13 @@
 package com.aniket.mirror.replicator.service.kafka;
 
 import com.aniket.mirror.events.FileUploadEvent;
+import com.aniket.mirror.replicator.config.KafkaListenerConfig;
 import com.aniket.mirror.replicator.service.replication.FileReplicationJobService;
 import com.aniket.mirror.replicator.service.executor.JobExecutorService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.slf4j.MDC;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Service;
@@ -19,36 +22,47 @@ public class UploadEventConsumer
 
   private final JobExecutorService jobExecutorService;
 
-  @KafkaListener(topics = "file_upload", groupId = "file-upload-consumer-group")
-  public void consume(FileUploadEvent event, Acknowledgment ack) {
+  @KafkaListener(
+      topics = "${mirror.kafka.file-upload-topic:file_upload}",
+      groupId = "${spring.kafka.consumer.group-id:file-upload-consumer-group}"
+  )
+  public void consume(ConsumerRecord<String, FileUploadEvent> record, Acknowledgment ack) {
+    FileUploadEvent event = record.value();
 
     try {
-      log.info("Received FileUploadEvent: {}", event);
+      KafkaListenerConfig.putHeaderIfPresent(record, "X-Trace-Id", "traceId");
+      KafkaListenerConfig.putHeaderIfPresent(record, "X-Event-Id", "eventId");
 
-      boolean isValidEvent = validateEvent(event);
-
-      if (isValidEvent) {
-        processEvent(event);
-      } else {
-        log.error("Received an unexpected event {}", event);
+      if (event != null && event.getEventId() != null && !event.getEventId().isBlank()) {
+        MDC.put("eventId", event.getEventId());
+        MDC.put("jobId", event.getEventId());
       }
 
-    } catch (Exception e) {
-      log.error("Error while consuming event: {}", event, e);
+      log.info("Received FileUploadEvent | key={} | topic={} | partition={} | offset={}",
+          record.key(), record.topic(), record.partition(), record.offset());
+
+      FileReplicationJobService.ValidationResult validation = fileReplicationJobService.validateFileUploadEvent(event);
+
+      if (validation == FileReplicationJobService.ValidationResult.INVALID) {
+        throw new IllegalArgumentException("Invalid FileUploadEvent");
+      }
+      if (validation == FileReplicationJobService.ValidationResult.DUPLICATE) {
+        log.info("Duplicate FileUploadEvent ignored (idempotent) | eventId={} | fileId={}", event.getEventId(), event.getFileId());
+        ack.acknowledge();
+        return;
+      }
+
+      processEvent(event);
+      ack.acknowledge();
     } finally {
-      ack.acknowledge(); //  ensures commit always happens
+      MDC.clear();
     }
   }
 
 
-  private boolean validateEvent(FileUploadEvent event) {
-    return fileReplicationJobService.validateFileUploadEvent(event);
-  }
-
   //process event here
   private void processEvent(FileUploadEvent event) {
     log.info("Processing FileUploadEvent: {}", event);
-    //process here
     jobExecutorService.processEvent(event);
     log.info("End of processing FileUploadEvent");
   }

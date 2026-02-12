@@ -18,17 +18,30 @@ public class FileReplicationJobService {
 
   private final FileReplicationJobRepository repository;
 
-  public boolean validateFileUploadEvent(FileUploadEvent event) {
-    if(event!=null && event.getFileName()!=null && !event.getFileName().isEmpty() && event.getEventId()!=null && !event.getEventId().isEmpty()) {
-      //check if event already exist
-      if(repository.existsById(event.getEventId()) || repository.existsByFileId(event.getFileId())){
-        log.error("File already exists with eventId: {} and fileId {}", event.getEventId(),event.getFileId());
-        return false;
-      };
-      return true;
-    }else{
-      return false;
+  public ValidationResult validateFileUploadEvent(FileUploadEvent event) {
+    if (event == null) {
+      return ValidationResult.INVALID;
     }
+    if (event.getEventId() == null || event.getEventId().isBlank()) {
+      return ValidationResult.INVALID;
+    }
+    if (event.getFileId() == null || event.getFileId().isBlank()) {
+      return ValidationResult.INVALID;
+    }
+    if (event.getFileName() == null || event.getFileName().isBlank()) {
+      return ValidationResult.INVALID;
+    }
+
+    if (repository.existsById(event.getEventId()) || repository.existsByFile_FileId(event.getFileId())) {
+      return ValidationResult.DUPLICATE;
+    }
+    return ValidationResult.NEW;
+  }
+
+  public enum ValidationResult {
+    NEW,
+    DUPLICATE,
+    INVALID
   }
 
   public FileReplicationJob saveFileUploadEvent(FileUploadEvent event,

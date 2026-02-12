@@ -5,6 +5,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface FileReplicationJobRepository extends JpaRepository<FileReplicationJob, String> {
 
-  boolean existsByFileId(String fileId);
+  boolean existsByFile_FileId(String fileId);
 
 }
