@@ -548,17 +548,6 @@ CREATE DATABASE replicator_db;
 | `file_mirrored` | Produced | `FileMirrorEvent` |
 | `file_mirror_check` | Produced | `MirrorCheckEvent` |
 
-### REST Endpoints
-
-_Note: Currently no REST API exposed. Service operates purely via Kafka events._
-
-Future endpoints (planned):
-- `GET /jobs/{jobId}` - Retrieve job status
-- `GET /files/{fileId}/mirrors` - List mirror providers for file
-- `POST /jobs/{jobId}/retry` - Manually retry failed job
-
----
-
 ## Distributed Systems Concepts
 
 ### Asynchronous Processing
@@ -600,39 +589,5 @@ Future endpoints (planned):
 
 ---
 
-## Contributing
-
-### Code Style
-- Follow Spring Boot best practices
-- Use Lombok annotations for boilerplate reduction
-- Write comprehensive JavaDocs for public APIs
-
-### Testing
-```bash
-# Run unit tests
-./gradlew test
-
-# Run integration tests
-./gradlew integrationTest
-
-# Run all checks
-./gradlew check
-```
-
----
-
-## License
-
-_[Add license information]_
-
----
-
-## Support
-
-For issues and questions:
-- GitHub Issues: [replicator/issues](https://github.com/aniket-herle/replicator/issues)
-- Email: [support@multimirror.com](mailto:support@multimirror.com)
-
----
 
 **Built with ❤️ for the Multi Mirror Project**
