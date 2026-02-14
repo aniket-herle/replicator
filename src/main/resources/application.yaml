@@ -33,7 +33,6 @@ spring:
           spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
 
           spring.json.trusted.packages: com.aniket.mirror.events
-          spring.json.value.default.type: com.aniket.mirror.events.FileUploadEvent
 
       producer:
         bootstrap-servers: localhost:9092
@@ -41,8 +40,6 @@ spring:
         key-serializer: org.apache.kafka.common.serialization.StringSerializer
         value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
         retries: 3
-        properties:
-          spring.json.add.type.headers: false
 
 logging:
   file:
@@ -65,11 +62,17 @@ mirror:
   enabled-providers:
     - STREAM_TAPE
     - KRAKEN_FILE
+  recheck:
+    period-days: 30
+    cron: "0 0 0,12 * * *"
+    batch-size: 50
   polling:
     dispatch-delay-ms: 30000
     batch-size: 50
   kafka:
     file-upload-topic: file_upload
+    file-mirrored-topic: file_mirrored
+    file-mirror-check-topic: file_mirror_check
     retry:
       max-attempts: 5
       backoff-ms: 1000

@@ -9,5 +9,7 @@ public interface MirrorProviderService {
 
   void poll(MirrorProvider job) throws InterruptedException;
 
+  void checkAndRepair(MirrorProvider job) throws InterruptedException;
+
   ProviderType getType();
 }

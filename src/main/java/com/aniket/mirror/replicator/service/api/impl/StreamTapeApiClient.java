@@ -4,6 +4,7 @@ import com.aniket.mirror.replicator.config.properties.StreamTapeProperties;
 import com.aniket.mirror.replicator.exception.ServerException;
 import com.aniket.mirror.replicator.constants.ProviderType;
 import com.aniket.mirror.replicator.dto.response.ApiResponse;
+import com.aniket.mirror.replicator.dto.response.streamtape.info.STFileInfoResponse;
 import com.aniket.mirror.replicator.dto.response.streamtape.poll.STRemoteUploadPollResponse;
 import com.aniket.mirror.replicator.dto.response.streamtape.upload.STRemoteUploadResponse;
 import com.aniket.mirror.replicator.entity.FileReplicationJob;
@@ -100,6 +101,40 @@ public class StreamTapeApiClient
       long duration = System.currentTimeMillis() - startTime;
       log.error("Failed StreamTape poll call | uploadId={} | durationMs={} | error={}", remoteUploadId, duration, ex.getMessage(), ex);
       throw new ServerException("EXTERNAL_SERVICE_FAILURE", HttpStatus.BAD_GATEWAY, "Failed to poll status from StreamTape API", ex);
+    }
+  }
+
+  @Override
+  public STFileInfoResponse getFileInfo(String externalFileId) {
+    long startTime = System.currentTimeMillis();
+    try {
+      if (properties.getApiLogin() == null || properties.getApiLogin().isBlank()
+          || properties.getApiKey() == null || properties.getApiKey().isBlank()) {
+        throw new IllegalStateException("StreamTape credentials are not configured");
+      }
+      log.info("Starting external call to StreamTape API for file info, fileId: {}", externalFileId);
+      STFileInfoResponse response = restClient.get()
+          .uri(uriBuilder -> uriBuilder
+              .path("/file/info")
+              .queryParam("login", properties.getApiLogin())
+              .queryParam("key", properties.getApiKey())
+              .queryParam("file", externalFileId)
+              .build()
+          )
+          .retrieve()
+          .body(STFileInfoResponse.class);
+
+      long duration = System.currentTimeMillis() - startTime;
+      log.info("External call to StreamTape API for file info completed successfully in {}ms, fileId: {}", duration, externalFileId);
+      return response;
+    } catch (RestClientResponseException ex) {
+      long duration = System.currentTimeMillis() - startTime;
+      log.error("Failed StreamTape file info call | fileId={} | durationMs={} | status={} | response={}", externalFileId, duration, ex.getStatusCode(), truncateResponseBody(ex.getResponseBodyAsString()));
+      throw new ServerException("EXTERNAL_SERVICE_FAILURE", HttpStatus.BAD_GATEWAY, "Failed to get file info from StreamTape API", ex);
+    } catch (RestClientException ex) {
+      long duration = System.currentTimeMillis() - startTime;
+      log.error("Failed StreamTape file info call | fileId={} | durationMs={} | error={}", externalFileId, duration, ex.getMessage(), ex);
+      throw new ServerException("EXTERNAL_SERVICE_FAILURE", HttpStatus.BAD_GATEWAY, "Failed to get file info from StreamTape API", ex);
     }
   }
 

@@ -3,12 +3,15 @@ package com.aniket.mirror.replicator.service.mirror.impl;
 import com.aniket.mirror.replicator.constants.FileStatus;
 import com.aniket.mirror.replicator.constants.ProviderType;
 import com.aniket.mirror.replicator.config.properties.StreamTapeProperties;
+import com.aniket.mirror.replicator.dto.response.streamtape.info.STFileInfoData;
+import com.aniket.mirror.replicator.dto.response.streamtape.info.STFileInfoResponse;
 import com.aniket.mirror.replicator.dto.response.streamtape.poll.STRemoteUploadPollResponse;
 import com.aniket.mirror.replicator.dto.response.streamtape.poll.STVideoData;
 import com.aniket.mirror.replicator.dto.response.streamtape.upload.STRemoteUploadResponse;
 import com.aniket.mirror.replicator.entity.MirrorProvider;
 import com.aniket.mirror.replicator.repository.MirrorProviderRepository;
 import com.aniket.mirror.replicator.service.api.impl.StreamTapeApiClient;
+import com.aniket.mirror.replicator.service.kafka.FileMirroredProducerService;
 import com.aniket.mirror.replicator.service.mirror.MirrorProviderService;
 import com.aniket.mirror.replicator.service.s3.S3PresignService;
 import java.time.Instant;
@@ -29,6 +32,8 @@ public class StreamTapeMirrorProviderService
   private final S3PresignService s3PresignService;
 
   private final MirrorProviderRepository mirrorProviderRepository;
+
+  private final FileMirroredProducerService mirroredProducerService;
 
   private final StreamTapeProperties properties;
 
@@ -52,6 +57,7 @@ public class StreamTapeMirrorProviderService
     if(!validateResponse(response)) {
       log.error("Error uploading stream tape, response={}", response);
       provider.setFileStatus(FileStatus.FAILED);
+      mirroredProducerService.sendMirroredEvent(provider);
     }else{
       provider.setRemoteUploadId(response.getResult().getId());
       provider.setFileStatus(FileStatus.SUBMITTED);
@@ -61,6 +67,39 @@ public class StreamTapeMirrorProviderService
     log.info("Completed mirroring via {}", getType());
   }
 
+
+  @Override
+  @Async("taskExecutor")
+  public void checkAndRepair(MirrorProvider provider) {
+    log.info("Checking and repairing for {} for external file ID {}", getType(), provider.getExternalFileId());
+    
+    if (provider.getExternalFileId() == null || provider.getExternalFileId().isBlank()) {
+      log.warn("No external file ID found for mirror provider {}, triggering re-mirror", provider.getId());
+      mirror(provider);
+      return;
+    }
+
+    STFileInfoResponse response = streamTapeApiClient.getFileInfo(provider.getExternalFileId());
+    
+    if (response == null || !response.validateResponse()) {
+      log.error("Failed to get file info from StreamTape for fileID={}, response={}", provider.getExternalFileId(), response);
+      // If we can't confirm it's alive, we assume it needs re-mirroring
+      mirror(provider);
+      return;
+    }
+
+    STFileInfoData data = response.getResult().get(provider.getExternalFileId());
+    if (data == null || data.getStatus() != 200) {
+      log.warn("File {} is not alive on StreamTape (status={}), triggering re-upload", provider.getExternalFileId(), data != null ? data.getStatus() : "null");
+      mirror(provider);
+    } else {
+      log.info("File {} is alive on StreamTape", provider.getExternalFileId());
+      provider.setLastPolledAt(Instant.now());
+      mirrorProviderRepository.save(provider);
+      // Even if alive, send back successful event to sync status
+      mirroredProducerService.sendMirroredEvent(provider);
+    }
+  }
 
   @Override
   @Async("pollingExecutor")
@@ -129,6 +168,7 @@ public class StreamTapeMirrorProviderService
     job.setNextPollAt(null);
     job.setLastError(null);
     log.info("StreamTape upload finished for remoteId={}, linkId={}", job.getRemoteUploadId(), linkId);
+    mirroredProducerService.sendMirroredEvent(job);
   }
 
   private void handleInProgress(MirrorProvider job) {
@@ -150,6 +190,7 @@ public class StreamTapeMirrorProviderService
       job.setFileStatus(FileStatus.FAILED);
       job.setNextPollAt(null);
       log.error("Marking job failed after {} attempts, remoteId={}, error={}", job.getPollAttemptCount(), job.getRemoteUploadId(), errorMsg);
+      mirroredProducerService.sendMirroredEvent(job);
     } else {
       long waitSeconds = calculateBackoffSeconds(job.getPollAttemptCount());
       job.setNextPollAt(Instant.now().plusSeconds(waitSeconds));
@@ -164,6 +205,7 @@ public class StreamTapeMirrorProviderService
     job.setLastError(message);
     job.setNextPollAt(null);
     log.error("Permanent failure for remoteId={}, message={}", job.getRemoteUploadId(), message);
+    mirroredProducerService.sendMirroredEvent(job);
   }
 
   private long calculateBackoffSeconds(int attemptCount) {

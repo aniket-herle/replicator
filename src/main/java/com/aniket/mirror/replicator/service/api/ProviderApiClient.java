@@ -10,4 +10,6 @@ public interface ProviderApiClient {
   ApiResponse upload(FileReplicationJob job,String fileURL);
 
   ApiResponse pollStatus(String remoteUploadId);
+
+  ApiResponse getFileInfo(String externalFileId);
 }
