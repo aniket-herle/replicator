@@ -29,9 +29,9 @@ public class MirrorRecheckScheduler {
     log.info("Starting global recheck sweep for providers not polled in {} days", properties.getPeriodDays());
 
     Instant threshold = Instant.now().minus(properties.getPeriodDays(), ChronoUnit.DAYS);
-    List<MirrorProvider> providersToRecheck = mirrorProviderRepository.findForRecheck(
+    List<MirrorProvider> providersToRecheck = mirrorProviderRepository.findRecheckCandidates(
         threshold,
-        PageRequest.of(0, properties.getBatchSize())
+        properties.getBatchSize()
     );
 
     if (providersToRecheck.isEmpty()) {

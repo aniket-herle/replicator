@@ -13,20 +13,13 @@ import org.springframework.data.repository.query.Param;
 
 public interface MirrorProviderRepository extends JpaRepository<MirrorProvider, Long> {
 
-  List<MirrorProvider> findTop50ByFileStatusAndNextPollAtLessThanEqual(
-      FileStatus fileStatus,
-      Instant now
-  );
 
-  List<MirrorProvider> findByFileStatusAndNextPollAtLessThanEqual(
-      FileStatus fileStatus,
-      Instant now,
-      Pageable pageable
-  );
 
-  @Query("SELECT mp FROM MirrorProvider mp WHERE " +
-      "(mp.lastPolledAt < :threshold OR (mp.lastPolledAt IS NULL AND mp.createdAt < :threshold))")
-  List<MirrorProvider> findForRecheck(@Param("threshold") Instant threshold, Pageable pageable);
+  @Query(value = "SELECT * FROM mirror_provider mp WHERE mp.file_status = :status AND mp.next_poll_at <= :now ORDER BY mp.next_poll_at ASC LIMIT :limit FOR UPDATE SKIP LOCKED", nativeQuery = true)
+  List<MirrorProvider> findPollingCandidates(@Param("status") String status, @Param("now") Instant now, @Param("limit") int limit);
+
+  @Query(value = "SELECT * FROM mirror_provider mp WHERE (mp.last_polled_at < :threshold OR (mp.last_polled_at IS NULL AND mp.created_at < :threshold)) LIMIT :limit FOR UPDATE SKIP LOCKED", nativeQuery = true)
+  List<MirrorProvider> findRecheckCandidates(@Param("threshold") Instant threshold, @Param("limit") int limit);
 
   Optional<MirrorProvider> findByFileReplicationJob_File_FileIdAndProviderName(String fileId, ProviderType providerName);
 }

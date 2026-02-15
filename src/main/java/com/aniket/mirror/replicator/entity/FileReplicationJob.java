@@ -39,6 +39,9 @@ public class FileReplicationJob {
       fetch = FetchType.LAZY)
   private List<MirrorProvider> mirrorProviderList;
 
+  @Version
+  private Long version;
+
   @CreationTimestamp
   private Instant jobCreatedAt;
 
